@@ -95,6 +95,13 @@ const CheckoutPage = () => {
     setIsLoading(false);
   };
 
+  const generateOrderNumber = () => {
+    const date = new Date();
+    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `ORD-${dateStr}-${random}`;
+  };
+
   const handleCODOrder = async () => {
     setIsLoading(true);
     try {
@@ -102,12 +109,14 @@ const CheckoutPage = () => {
         .from('orders')
         .insert([{
           user_id: user?.id,
+          order_number: generateOrderNumber(),
           subtotal: totalPrice,
           shipping_cost: shippingCost,
           tax_amount: taxAmount,
           total_amount: orderTotal,
-          payment_method: 'cod' as const,
-          payment_status: 'pending' as const,
+          payment_method: 'cod',
+          payment_status: 'pending',
+          status: 'pending',
           shipping_address: {
             full_name: fullName,
             phone,
@@ -124,7 +133,6 @@ const CheckoutPage = () => {
 
       if (orderError) throw orderError;
 
-      // Add order items
       const orderItems = items.map(item => ({
         order_id: order.id,
         product_id: item.product.id,
@@ -140,6 +148,11 @@ const CheckoutPage = () => {
         .insert(orderItems);
 
       if (itemsError) throw itemsError;
+
+      // Send order confirmation email
+      await supabase.functions.invoke('send-order-email', {
+        body: { orderId: order.id, type: 'confirmation' },
+      });
 
       clearCart();
       navigate(`/order-confirmation/${order.id}`);
