@@ -1,1 +1,7 @@
 project_id = "psxgifboghlvkogkwraj"
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.send-order-email]
+verify_jwt = false
