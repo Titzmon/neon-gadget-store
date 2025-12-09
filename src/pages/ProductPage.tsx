@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button';
 import { ProductCard } from '@/components/ProductCard';
 import { getProductById, getProductsByCategory, categories } from '@/data/products';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ChevronRight, 
   Star, 
@@ -18,7 +21,8 @@ import {
   Shield, 
   RotateCcw,
   Minus,
-  Plus
+  Plus,
+  HeartOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,9 +30,137 @@ const ProductPage = () => {
   const { productId } = useParams<{ productId: string }>();
   const product = getProductById(productId || '');
   const { addToCart } = useCart();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [quantity, setQuantity] = useState(1);
   const [isImageHovered, setIsImageHovered] = useState(false);
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const imageRef = useRef<HTMLDivElement>(null);
+
+  // Track viewed history
+  useEffect(() => {
+    const trackView = async () => {
+      if (user && productId) {
+        // First check if product exists in database
+        const { data: dbProduct } = await supabase
+          .from('products')
+          .select('id')
+          .eq('slug', productId)
+          .single();
+
+        if (dbProduct) {
+          // Check if already viewed recently
+          const { data: existing } = await supabase
+            .from('viewed_history')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product_id', dbProduct.id)
+            .single();
+
+          if (existing) {
+            // Update the viewed_at timestamp
+            await supabase
+              .from('viewed_history')
+              .update({ viewed_at: new Date().toISOString() })
+              .eq('id', existing.id);
+          } else {
+            // Insert new view
+            await supabase
+              .from('viewed_history')
+              .insert({ user_id: user.id, product_id: dbProduct.id });
+          }
+        }
+      }
+    };
+    trackView();
+  }, [user, productId]);
+
+  // Check if product is in wishlist
+  useEffect(() => {
+    const checkWishlist = async () => {
+      if (user && productId) {
+        const { data: dbProduct } = await supabase
+          .from('products')
+          .select('id')
+          .eq('slug', productId)
+          .single();
+
+        if (dbProduct) {
+          const { data } = await supabase
+            .from('wishlist')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('product_id', dbProduct.id)
+            .single();
+          
+          setIsInWishlist(!!data);
+        }
+      }
+    };
+    checkWishlist();
+  }, [user, productId]);
+
+  const handleWishlistToggle = async () => {
+    if (!user) {
+      toast({
+        title: 'Please sign in',
+        description: 'You need to be logged in to add items to your wishlist',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setWishlistLoading(true);
+    try {
+      // Get product from database
+      const { data: dbProduct } = await supabase
+        .from('products')
+        .select('id')
+        .eq('slug', productId)
+        .single();
+
+      if (!dbProduct) {
+        toast({
+          title: 'Product not found',
+          description: 'This product is not available in the database',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (isInWishlist) {
+        await supabase
+          .from('wishlist')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('product_id', dbProduct.id);
+        
+        setIsInWishlist(false);
+        toast({
+          title: 'Removed from wishlist',
+          description: 'Product removed from your wishlist',
+        });
+      } else {
+        await supabase
+          .from('wishlist')
+          .insert({ user_id: user.id, product_id: dbProduct.id });
+        
+        setIsInWishlist(true);
+        toast({
+          title: 'Added to wishlist',
+          description: 'Product added to your wishlist',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+    setWishlistLoading(false);
+  };
 
   if (!product) {
     return (
@@ -132,8 +264,14 @@ const ProductPage = () => {
 
               {/* Action Buttons */}
               <div className="absolute top-6 right-6 flex flex-col gap-3">
-                <Button variant="secondary" size="icon" className="rounded-full shadow-lg">
-                  <Heart className="w-5 h-5" />
+                <Button 
+                  variant={isInWishlist ? "default" : "secondary"} 
+                  size="icon" 
+                  className={cn("rounded-full shadow-lg", isInWishlist && "bg-destructive hover:bg-destructive/90")}
+                  onClick={handleWishlistToggle}
+                  disabled={wishlistLoading}
+                >
+                  {isInWishlist ? <HeartOff className="w-5 h-5" /> : <Heart className="w-5 h-5" />}
                 </Button>
                 <Button variant="secondary" size="icon" className="rounded-full shadow-lg">
                   <Share2 className="w-5 h-5" />
