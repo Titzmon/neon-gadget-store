@@ -1,10 +1,18 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ShoppingCart, User, Menu, X, ChevronDown } from 'lucide-react';
+import { Search, ShoppingCart, User, Menu, X, ChevronDown, Heart, Clock, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { categories, searchProducts } from '@/data/products';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -12,6 +20,7 @@ export const Navbar = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const { totalItems, setIsCartOpen } = useCart();
+  const { user, profile, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const searchResults = searchQuery.length > 2 ? searchProducts(searchQuery).slice(0, 5) : [];
@@ -134,9 +143,64 @@ export const Navbar = () => {
 
           {/* Right Actions */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="hidden md:flex">
-              <User className="w-5 h-5" />
-            </Button>
+            {user ? (
+              <>
+                <Link to="/wishlist">
+                  <Button variant="ghost" size="icon" className="hidden md:flex">
+                    <Heart className="w-5 h-5" />
+                  </Button>
+                </Link>
+                <Link to="/recently-viewed">
+                  <Button variant="ghost" size="icon" className="hidden md:flex">
+                    <Clock className="w-5 h-5" />
+                  </Button>
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="hidden md:flex">
+                      <User className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="px-3 py-2">
+                      <p className="font-medium">{profile?.full_name || profile?.username || 'User'}</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/profile" className="cursor-pointer">Profile</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/orders" className="cursor-pointer">My Orders</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/wishlist" className="cursor-pointer">Wishlist</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/recently-viewed" className="cursor-pointer">Recently Viewed</Link>
+                    </DropdownMenuItem>
+                    {isAdmin && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin" className="cursor-pointer text-primary">Admin Dashboard</Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()} className="cursor-pointer text-destructive">
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Link to="/auth">
+                <Button variant="ghost" size="icon" className="hidden md:flex">
+                  <LogIn className="w-5 h-5" />
+                </Button>
+              </Link>
+            )}
             
             <Button 
               variant="ghost" 
@@ -200,6 +264,70 @@ export const Navbar = () => {
                   <span className="font-medium">{category.name}</span>
                 </Link>
               ))}
+              <div className="border-t border-border my-2" />
+              {user ? (
+                <>
+                  <Link 
+                    to="/profile"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <User className="w-5 h-5" />
+                    <span className="font-medium">Profile</span>
+                  </Link>
+                  <Link 
+                    to="/orders"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <ShoppingCart className="w-5 h-5" />
+                    <span className="font-medium">My Orders</span>
+                  </Link>
+                  <Link 
+                    to="/wishlist"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <Heart className="w-5 h-5" />
+                    <span className="font-medium">Wishlist</span>
+                  </Link>
+                  <Link 
+                    to="/recently-viewed"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <Clock className="w-5 h-5" />
+                    <span className="font-medium">Recently Viewed</span>
+                  </Link>
+                  {isAdmin && (
+                    <Link 
+                      to="/admin"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors text-primary"
+                    >
+                      <span className="font-medium">Admin Dashboard</span>
+                    </Link>
+                  )}
+                  <button 
+                    onClick={() => {
+                      signOut();
+                      setIsMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors text-destructive w-full text-left"
+                  >
+                    <span className="font-medium">Sign Out</span>
+                  </button>
+                </>
+              ) : (
+                <Link 
+                  to="/auth"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <LogIn className="w-5 h-5" />
+                  <span className="font-medium">Sign In</span>
+                </Link>
+              )}
             </div>
           </div>
         )}
