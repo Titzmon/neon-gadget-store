@@ -19,6 +19,9 @@ import CheckoutPage from "./pages/CheckoutPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import OrdersPage from "./pages/OrdersPage";
 import OrderDetailPage from "./pages/OrderDetailPage";
+import WishlistPage from "./pages/WishlistPage";
+import RecentlyViewedPage from "./pages/RecentlyViewedPage";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +47,9 @@ const App = () => (
                 <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+                <Route path="/wishlist" element={<WishlistPage />} />
+                <Route path="/recently-viewed" element={<RecentlyViewedPage />} />
+                <Route path="/admin/*" element={<AdminDashboard />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <FloatingChatButton />
