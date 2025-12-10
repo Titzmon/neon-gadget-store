@@ -4,4 +4,4 @@ project_id = "psxgifboghlvkogkwraj"
 verify_jwt = true
 
 [functions.send-order-email]
-verify_jwt = false
+verify_jwt = true
