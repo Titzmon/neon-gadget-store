@@ -35,10 +35,56 @@ serve(async (req) => {
     
     const user = userData.user;
     if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    logStep("User authenticated", { userId: user.id });
 
     const { items, shipping_address } = await req.json();
     logStep("Request body parsed", { itemCount: items?.length });
+
+    // Validate items array
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("Invalid items: must be a non-empty array");
+    }
+
+    // Extract product IDs and validate quantities
+    const productIds: string[] = [];
+    const quantityMap: Record<string, number> = {};
+    
+    for (const item of items) {
+      if (!item.product_id || typeof item.product_id !== 'string') {
+        throw new Error("Invalid item: missing or invalid product_id");
+      }
+      if (!item.quantity || typeof item.quantity !== 'number' || item.quantity < 1 || !Number.isInteger(item.quantity)) {
+        throw new Error("Invalid item: quantity must be a positive integer");
+      }
+      productIds.push(item.product_id);
+      quantityMap[item.product_id] = item.quantity;
+    }
+
+    // Fetch actual product prices from database - SERVER-SIDE PRICE VALIDATION
+    const { data: dbProducts, error: productsError } = await supabaseClient
+      .from('products')
+      .select('id, name, price, images, is_active')
+      .in('id', productIds);
+
+    if (productsError) {
+      logStep("Database error fetching products", { error: productsError.message });
+      throw new Error("Failed to fetch product information");
+    }
+
+    if (!dbProducts || dbProducts.length !== productIds.length) {
+      const foundIds = dbProducts?.map(p => p.id) || [];
+      const missingIds = productIds.filter(id => !foundIds.includes(id));
+      logStep("Product validation failed", { missingIds });
+      throw new Error("One or more products not found");
+    }
+
+    // Validate all products are active
+    const inactiveProducts = dbProducts.filter(p => !p.is_active);
+    if (inactiveProducts.length > 0) {
+      throw new Error("One or more products are no longer available");
+    }
+
+    logStep("Products validated from database", { productCount: dbProducts.length });
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
@@ -53,25 +99,30 @@ serve(async (req) => {
       logStep("Found existing customer", { customerId });
     }
 
-    // Create line items for Stripe
-    const lineItems = items.map((item: any) => ({
+    // Create line items for Stripe using DATABASE prices (not client-provided)
+    const lineItems = dbProducts.map((product) => ({
       price_data: {
         currency: "usd",
         product_data: {
-          name: item.name,
-          images: item.image ? [item.image] : [],
+          name: product.name,
+          images: product.images && product.images.length > 0 ? [product.images[0]] : [],
         },
-        unit_amount: Math.round(item.price * 100),
+        unit_amount: Math.round(product.price * 100),
       },
-      quantity: item.quantity,
+      quantity: quantityMap[product.id],
     }));
 
-    // Calculate totals
-    const subtotal = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+    // Calculate totals using DATABASE prices
+    const subtotal = dbProducts.reduce((sum, product) => {
+      return sum + (product.price * quantityMap[product.id]);
+    }, 0);
+    
     const shippingCost = subtotal > 100 ? 0 : 9.99;
     const taxRate = 0.08;
     const taxAmount = subtotal * taxRate;
     const totalAmount = subtotal + shippingCost + taxAmount;
+
+    logStep("Totals calculated from DB prices", { subtotal, shippingCost, taxAmount, totalAmount });
 
     // Generate order number
     const date = new Date();
@@ -103,15 +154,15 @@ serve(async (req) => {
     }
     logStep("Order created", { orderId: order.id });
 
-    // Add order items
-    const orderItems = items.map((item: any) => ({
+    // Add order items using DATABASE product data
+    const orderItems = dbProducts.map((product) => ({
       order_id: order.id,
-      product_id: item.product_id,
-      product_name: item.name,
-      product_image: item.image,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.price * item.quantity,
+      product_id: product.id,
+      product_name: product.name,
+      product_image: product.images && product.images.length > 0 ? product.images[0] : null,
+      quantity: quantityMap[product.id],
+      unit_price: product.price,
+      total_price: product.price * quantityMap[product.id],
     }));
 
     const { error: itemsError } = await supabaseClient
@@ -154,7 +205,7 @@ serve(async (req) => {
       ],
     });
 
-    logStep("Checkout session created", { sessionId: session.id, url: session.url });
+    logStep("Checkout session created", { sessionId: session.id });
 
     // Update order with payment intent
     if (session.payment_intent) {
