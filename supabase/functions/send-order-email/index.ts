@@ -30,6 +30,20 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
+    // Verify the authenticated user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("Missing authorization header");
+    }
+    
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !user) {
+      throw new Error("Unauthorized: Invalid token");
+    }
+    logStep("User authenticated", { userId: user.id });
+
     const { orderId, type } = await req.json();
     logStep("Request parsed", { orderId, type });
 
@@ -44,6 +58,18 @@ serve(async (req) => {
       throw new Error(`Order not found: ${orderError?.message}`);
     }
     logStep("Order fetched", { orderNumber: order.order_number });
+
+    // Authorization check: verify the user owns the order or is an admin
+    const { data: isAdmin } = await supabaseClient.rpc('has_role', {
+      _user_id: user.id,
+      _role: 'admin'
+    });
+
+    if (order.user_id !== user.id && !isAdmin) {
+      logStep("Authorization failed", { orderUserId: order.user_id, requestUserId: user.id });
+      throw new Error("Unauthorized: You don't have permission to access this order");
+    }
+    logStep("Authorization verified");
 
     // Fetch order items
     const { data: items } = await supabaseClient
