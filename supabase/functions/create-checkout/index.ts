@@ -181,8 +181,8 @@ serve(async (req) => {
       customer_email: customerId ? undefined : user.email,
       line_items: lineItems,
       mode: "payment",
-      success_url: `${origin}/order-confirmation/${order.id}?payment=success`,
-      cancel_url: `${origin}/checkout?payment=cancelled`,
+      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}&order_id=${order.id}`,
+      cancel_url: `${origin}/cancel`,
       metadata: {
         order_id: order.id,
         order_number: orderNumber,
