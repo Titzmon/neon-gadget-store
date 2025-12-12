@@ -22,6 +22,8 @@ import OrderDetailPage from "./pages/OrderDetailPage";
 import WishlistPage from "./pages/WishlistPage";
 import RecentlyViewedPage from "./pages/RecentlyViewedPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import PaymentSuccessPage from "./pages/PaymentSuccessPage";
+import PaymentCancelPage from "./pages/PaymentCancelPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -49,6 +51,8 @@ const App = () => (
                 <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                 <Route path="/wishlist" element={<WishlistPage />} />
                 <Route path="/recently-viewed" element={<RecentlyViewedPage />} />
+                <Route path="/success" element={<PaymentSuccessPage />} />
+                <Route path="/cancel" element={<PaymentCancelPage />} />
                 <Route path="/admin/*" element={<AdminDashboard />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
